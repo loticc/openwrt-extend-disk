@@ -1,0 +1,29 @@
+name: lint
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: POSIX 语法检查 (dash)
+        run: dash -n extend-disk.sh
+
+      - name: 换行符必须是 LF
+        run: |
+          if grep -U $'\r' extend-disk.sh; then
+            echo "::error::extend-disk.sh 含有 CRLF，OpenWrt 上会报 \$'\\r': not found"
+            exit 1
+          fi
+          echo "LF ok"
+
+      - name: shellcheck（仅提示，不阻塞）
+        continue-on-error: true
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -s sh -S warning extend-disk.sh || true
