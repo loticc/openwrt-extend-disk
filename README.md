@@ -8,28 +8,220 @@
 
 适用于 **OpenWrt / ImmortalWrt / iStoreOS / LEDE / Armbian 以及任意 Linux**。不写死磁盘名和分区号，认不出的环境也不会瞎动手。
 
-## 一键执行
+---
+
+## 目录
+
+- [一键命令大全（直接复制）](#一键命令大全直接复制)
+- [三种动作选哪个（先看这里）](#三种动作选哪个先看这里)
+- [它解决的是什么问题](#它解决的是什么问题)
+- [菜单流程](#菜单流程)
+- [参数表](#参数表)
+- [支持的文件系统](#支持的文件系统)
+- [安全设计](#安全设计)
+- [FAQ](#faq)
+
+---
+
+## 一键命令大全（直接复制）
+
+下面每一段都是**独立完整**的，整行复制粘贴执行即可。所有命令里的 `/dev/vda` 换成你机器上真实的磁盘名（`--list` 里显示的那一列）。
+
+### ① 一键执行（推荐，CDN 加速）
 
 ```sh
 wget -qO- https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh | sh -s
 ```
 
-粘贴执行即可，全程中文菜单。所有改动动手前都会打印完整计划并要求输入 `YES`。
-
-三种获取方式，按网络情况挑一个：
-
-| 方式 | 地址 | 说明 |
-|---|---|---|
-| CDN 加速（推荐） | `https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh` | 国内一般能通，有缓存；脚本更新后可能延迟几分钟 |
-| GitHub 原始文件 | `https://raw.githubusercontent.com/loticc/openwrt-extend-disk/main/extend-disk.sh` | 内容最新，但国内直连经常失败 |
-| 仓库主页 | https://github.com/loticc/openwrt-extend-disk | 看源码、提 Issue、下载 Release |
-
-想先存下来再跑：
+### ② 一键执行（GitHub 原始直链）
 
 ```sh
-wget -qO /root/extend-disk.sh https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh
-chmod +x /root/extend-disk.sh
-sh /root/extend-disk.sh          # 之后随时可重跑，不用再联网
+wget -qO- https://raw.githubusercontent.com/loticc/openwrt-extend-disk/main/extend-disk.sh | sh -s
+```
+
+### ③ 先存本地再执行（可反复重跑，长期用推荐这个）
+
+```sh
+wget -qO /root/extend-disk.sh https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh && chmod +x /root/extend-disk.sh && sh /root/extend-disk.sh
+```
+
+存好之后，后面所有功能都不用再联网：
+
+```sh
+sh /root/extend-disk.sh                                        # 交互菜单
+sh /root/extend-disk.sh --list                                 # 只体检
+sh /root/extend-disk.sh --disk /dev/vda --info                 # 看某块盘的分区表
+```
+
+### ④ 只体检、绝不动手（每块新盘第一步）
+
+```sh
+wget -qO- https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh | sh -s -- --list
+```
+
+### ⑤ 看指定磁盘的分区表和尾部空闲
+
+```sh
+wget -qO- https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh | sh -s -- --disk /dev/vda --info
+```
+
+### ⑥ 动作 1：扩容已有分区到盘尾
+
+```sh
+wget -qO- https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh | sh -s -- --disk /dev/vda --resize 3 --yes
+```
+
+> `3` 是这个分区的**序号**（`--info` 表格里 NO 列那个数字），不是分区设备号。
+
+### ⑦ 动作 2：用剩余空间新建数据分区
+
+```sh
+wget -qO- https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh | sh -s -- --disk /dev/vda --new --label DATA --mount /mnt/data --yes
+```
+
+### ⑧ 动作 3：新建分区并接管 `/overlay`（执行完必须重启）
+
+```sh
+wget -qO- https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh | sh -s -- --disk /dev/vda --new --label IMMO_OVERLAY --as-overlay --yes
+```
+
+### ⑨ 装依赖 —— OpenWrt 25.x（apk）
+
+```sh
+apk update && apk add parted e2fsprogs e2fsprogs-extra
+```
+
+### ⑩ 装依赖 —— OpenWrt 24.x 及更早（opkg）
+
+```sh
+opkg update && opkg install parted e2fsprogs resize2fs
+```
+
+### ⑪ 装依赖 —— Debian / Ubuntu / Armbian
+
+```sh
+apt update && apt install -y parted e2fsprogs xfsprogs f2fs-tools
+```
+
+第 ⑨⑩⑪ 三条**只跑跟你系统对应的那一条**，不要全跑。
+
+---
+
+## 三种动作选哪个（先看这里）
+
+菜单里的 `1 / 2 / 3` 对应三种结果，搞错方向的代价是白干一次甚至系统起不来。先按这张表定位：
+
+| 你的情况 | 选哪个 | 一句话原因 |
+|---|---|---|
+| **OpenWrt 系固件（ImmortalWrt / iStoreOS / LEDE / 官方 OpenWrt），刷完镜像后盘没吃满** | **动作 3** | 这是唯一能同时解决「盘没用完」和「插件空间只有 1G」的方案 |
+| OpenWrt 系，只想多一块存东西的盘（镜像、备份、容器数据） | 动作 2 | 不动 `/overlay`，风险最低 |
+| Armbian / Debian / 普通 Linux，根分区没吃满 | 动作 1 | 根分区是 ext4，直接往后扩就行 |
+| Custom2 安装器已经自动分好 overlay 分区了 | 哪个都不用 | 安装时已经处理过，只需在磁盘调大后做一次扩容 |
+
+### 为什么 OpenWrt 上「动作 1」基本用不上
+
+OpenWrt 的分区通常是：`p1` 引导、`p2` 系统（**squashfs，只读**）、`p3` 数据分区。squashfs 是「压缩只读 + overlay 叠加」的文件系统，**物理上没法扩容**——它不是普通块设备文件系统，`resize2fs` 对它无效。
+
+你在菜单里选 1 并选中 p2 时，脚本会直接拦住并提示你走 2 或 3。这不是限制，是防止你把系统扩成砖。
+
+**只有 p2 是 ext4 的固件（少数自编译、或改过 rootfs 格式的）才能在 OpenWrt 上用动作 1。**
+
+### 推荐路径：动作 3（绝大多数人该走这条）
+
+这是解决「刷完固件盘没吃满 + 插件装不下」的标准答案。原理：你的插件、配置、软件包全都活在 `/overlay/upper` 里，把这个目录整体搬到新分区，`/overlay` 就变成整盘剩余空间那么大，而且升级固件时只重写 p1/p2，这块数据不受影响。
+
+**具体怎么用**
+
+第一步，先看清现状（只读，不动任何东西）：
+
+```sh
+wget -qO- https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh | sh -s -- --list
+```
+
+输出里确认三件事：磁盘名（比如 `/dev/vda`）、容量、尾部空闲是不是你说的那几 G。
+
+第二步，装依赖（第一次用才需要）：
+
+```sh
+apk update && apk add parted e2fsprogs e2fsprogs-extra
+```
+
+第三步入菜单，按提示选：
+
+```sh
+wget -qO- https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh | sh -s
+```
+
+顺序是：选磁盘 → 看分区表 → 动作选 `3` → 填 label（不填就用默认 `IMMO_OVERLAY`）→ 核对计划，输入 `YES`。
+
+中间它会做四件事：建分区 → 格式化成 ext4 → 把当前 `upper` 整个复制过去 → 往 `/etc/config/fstab` 写一条**按 label 挂载**的条目（不是按 `/dev/vda3`，因为设备名会变，label 不会）。
+
+第四步，**手动重启**：
+
+```sh
+reboot
+```
+
+第五步，验证成功了没有（这条最硬，别看别的）：
+
+```sh
+grep overlay /proc/mounts
+```
+
+- 看到 `/dev/vda3 ... /overlay`（或你新分区的设备名）→ **成功**
+- 还看到 `/dev/loop0 ... /overlay` → **没生效**，去查 `/etc/config/fstab` 里是不是留着一条旧的 UUID 条目，删掉它
+
+再确认一下容量：
+
+```sh
+df -h /overlay
+```
+
+容量应该是整盘剩余空间，而不是原来的 1007M。
+
+**这一步踩坑预警**：`sysupgrade` 恢复配置时会把你以前的 fstab 带回来，里面可能有一条**旧 UUID 写的 `/overlay`**。两条并存时旧的先命中，表现就是「明明搬了，重启后还是老容量」。删掉旧那条（只留 label 那条）再重启即可。
+
+### 动作 2 怎么用（只要数据盘、不想动 overlay）
+
+```sh
+wget -qO- https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh | sh -s -- --disk /dev/vda --new --label DATA --mount /mnt/data --yes
+```
+
+或者进菜单选 `2`，按提示填 label 和挂载点（挂载点可以留空，那就只建分区不挂）。
+
+做完的验证：
+
+```sh
+blkid | grep DATA
+df -h /mnt/data
+```
+
+分区立刻可用，**不需要重启**。如果填了挂载点，脚本会同时写进 fstab，重启后自动挂上。
+
+### 动作 1 怎么用（普通 Linux 根分区没吃满）
+
+```sh
+wget -qO- https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh | sh -s -- --disk /dev/vda --info
+```
+
+先看 `--info` 表格，找到你要扩的分区的 NO 序号（比如根分区是 `2`），然后：
+
+```sh
+wget -qO- https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh | sh -s -- --disk /dev/vda --resize 2 --yes
+```
+
+脚本会改分区结尾 → 自动跑 `resize2fs`（ext4）/ `xfs_growfs`（xfs）/ `btrfs resize`。ext4/xfs/btrfs **在线扩，不用重启、不用卸载**。
+
+验证：
+
+```sh
+df -h /
+```
+
+如果 `df` 没变，说明分区表扩了但文件系统没跟上的情况极少见（通常是 `resize2fs` 失败），手动补一次：
+
+```sh
+resize2fs /dev/vda2
 ```
 
 ---
@@ -46,12 +238,7 @@ Device     Start      End  Sectors Size
                                           ↑ 剩下 15G 全是空闲，但系统不认识
 ```
 
-更麻烦的是：**p2 是 squashfs，只读、扩不了**。所以「扩容」这件事在 OpenWrt 上不是 `resize2fs` 一句话能解决的，正确解法只有两条：
-
-1. **新建一个分区，接管 `/overlay`** —— 你的插件、配置、软件包都活在 `/overlay/upper` 里，搬到新分区后容量等于整盘剩余空间，而且升级固件时只重写 p1/p2，这块数据安然无恙。
-2. **新建一个分区当数据盘** —— 挂到 `/mnt/xxx`，存镜像、备份、容器数据。
-
-本脚本把这两条路 + 「普通 Linux 上扩 ext4 分区」都做成菜单，选一下就行。
+更麻烦的是 p2 是 squashfs 只读、扩不了，所以「扩容」在 OpenWrt 上不是一句 `resize2fs` 能解决的。
 
 ---
 
@@ -77,29 +264,11 @@ Device     Start      End  Sectors Size
   3) 新建分区并接管为 /overlay（自动搬现有插件层，重启后生效）
 ```
 
----
-
-## 三种动作的区别
-
-| 动作 | 效果 | 需要重启 | 典型场景 |
-|---|---|---|---|
-| `1` 扩容已有分区 | 只改分区的**结尾**，起点不动；随后 `resize2fs` / `xfs_growfs` / `btrfs resize` / `f2fs` 在线扩 | 否（ext4/xfs/btrfs）；f2fs 需重挂 | 普通 Linux / Armbian 根分区没吃满 |
-| `2` 新建分区 | 用尾部空闲建一个新分区，可选 label、可选写 fstab 挂到 `/mnt/xxx` | 否（挂载立刻生效） | 想要一块独立数据盘；OpenWrt 刷完镜像后最常见 |
-| `3` 新建分区接管 `/overlay` | 建分区 → 格式化 ext4 → 把当前 `overlay/upper` 整体复制过去 → 写 label fstab | 是 | 插件装爆了 1G overlay，要彻底解决 |
-
-动作 3 的关键细节：fstab 里用的是 **label**（`IMMO_OVERLAY`）而不是 `/dev/vda3`，因为设备名会随磁盘顺序、内核枚举变化，label 不会。
+交互读的是 `/dev/tty`，所以 `wget | sh -s` 这种管道执行也能正常问答。
 
 ---
 
-## 非交互用法（脚本化 / 批量）
-
-```sh
-sh extend-disk.sh --list                                      # 列出所有磁盘
-sh extend-disk.sh --disk /dev/sda --info                      # 看某块盘的分区表
-sh extend-disk.sh --disk /dev/sda --resize 3 --yes            # 扩第 3 个分区（序号见 --info）
-sh extend-disk.sh --disk /dev/sda --new --label DATA --mount /mnt/data --yes
-sh extend-disk.sh --disk /dev/sda --new --label IMMO_OVERLAY --as-overlay --yes
-```
+## 参数表
 
 | 参数 | 说明 |
 |---|---|
@@ -110,8 +279,8 @@ sh extend-disk.sh --disk /dev/sda --new --label IMMO_OVERLAY --as-overlay --yes
 | `--new` | 用尾部空闲建新分区 |
 | `--label <s>` | 新分区的 label |
 | `--mount <path>` | 把新分区挂到该路径并写 fstab |
-| `--as-overlay` | 新分区接管 `/overlay`（会复制 upper，需 reboot） |
-| `--yes` | 跳过 `YES` 确认（危险，用于自动化） |
+| `--as-overlay` | 新分区接管 `/overlay`（复制 upper，需 reboot） |
+| `--yes` | 跳过 `YES` 确认（用于自动化，**确认路径正确再用**） |
 
 ---
 
@@ -123,71 +292,54 @@ sh extend-disk.sh --disk /dev/sda --new --label IMMO_OVERLAY --as-overlay --yes
 | xfs | 能 | `xfs_growfs`，在线 |
 | btrfs | 能 | `btrfs filesystem resize`，在线 |
 | f2fs | 能 | `resize.f2fs`（需先卸载/重挂） |
-| vfat / ntfs / exfat | 不能 | 脚本直接提示：换用菜单 2 新建 |
-| **squashfs** | **不能** | 只读文件系统，物理上没得扩 → 走菜单 2 / 3 |
+| vfat / ntfs / exfat | 不能 | 脚本直接提示：换用动作 2 新建 |
+| **squashfs** | **不能** | 只读文件系统，物理上没得扩 → 走动作 2 / 3 |
 | iso9660 | 不能 | 同上 |
-
-脚本在选到不可扩的分区时会**直接拦下来并给出替代路径**，不会强行 `resize2fs` 把系统搞坏。
 
 ---
 
 ## 安全设计
 
-这几条是踩过坑才加上的，也是它能用在「不止一个固件」上的原因：
-
-1. **只往后延伸，从不往前挪**。扩容只改分区结束扇区，起点一个字节不动，所以不会碰分区里的数据。
-2. **绝不覆盖后面的分区**。目标分区后面如果有别的分区，最多扩到「下一个分区起点 − 1 扇区」。
-3. **尾部统一预留 34 扇区**（GPT 备份表用）。不去探测「这是 GPT 还是 MBR 再决定留多少」，因为误判成 MBR 后写到盘尾最后一扇区，正好把 GPT 备份表写坏 —— 表现就是**重启后磁盘突然不存在**。MBR 上白留 17 KB，代价忽略不计。
-4. **不预测新分区设备名**。建分区前后对比 `/sys/class/block/` 的节点差集，找出真正新增的那个，避免 `/dev/sda4` 猜错。
-5. **交互读 `/dev/tty`**。这样 `wget | sh -s` 管道执行时依然能正常问答（普通 `read` 在管道里会读到空值）。
-6. **再确认一次**。执行前打印完整计划（磁盘、分区、起止扇区、大小、动作），要手输 `YES` 才动。全脚本**没有任何删除分区的代码路径**。
-
----
-
-## 依赖
-
-脚本本身零依赖，但执行动作需要工具，缺了会提示：
-
-```sh
-# OpenWrt / ImmortalWrt（25.x 用 apk）
-apk add parted e2fsprogs e2fsprogs-extra
-
-# OpenWrt（24.x 及更早，用 opkg）
-opkg install parted e2fsprogs resize2fs
-
-# Debian / Ubuntu / Armbian
-apt install -y parted e2fsprogs xfsprogs f2fs-tools
-```
-
-只跑 `--list` / `--info` 不需要装任何东西。
+1. **只往后延伸，从不往前挪**。扩容只改分区结束扇区，起点一个字节不动。
+2. **绝不覆盖后面的分区**。目标分区后面还有别的分区时，最多扩到「下一个分区起点 − 1 扇区」。
+3. **尾部统一预留 34 扇区**给 GPT 备份表。不去猜「这是 GPT 还是 MBR 再决定留多少」，因为误判成 MBR 后写到盘尾最后一扇区，正好把 GPT 备份表写坏 —— 表现就是**重启后磁盘突然不存在**。MBR 上白留 17 KB，代价忽略不计。
+4. **不预测新分区设备名**。建分区前后对比 `/sys/class/block/` 的节点差集，找出真正新增的那个。
+5. **交互读 `/dev/tty`**，管道执行也能问答。
+6. **再确认一次**。执行前打印完整计划（磁盘、分区、起止扇区、大小、动作），要手输 `YES`。全脚本**没有任何删除分区的代码路径**。
 
 ---
 
 ## FAQ
 
 **扩完了，`df` 还是老大小？**
-分区表扩了但文件系统没扩。重跑一次动作 1（脚本会检测到分区已经是目标大小，然后只补 `resize2fs`），或手动 `resize2fs /dev/vda3`。
+分区表扩了但文件系统没扩。手动补 `resize2fs /dev/vda2`，或重跑动作 1（脚本检测到分区已是目标大小就只补文件系统）。
 
 **动作 3 做完重启，`/overlay` 还是原来的？**
-`/etc/config/fstab` 里大概率还有一条**旧的、按 UUID 写的** `/overlay` 条目（sysupgrade 恢复配置时会带回来），两条并存时旧的先命中。删掉旧那条，只留 label 那条。
+`/etc/config/fstab` 里大概率还有一条**旧的、按 UUID 写的** `/overlay` 条目（sysupgrade 恢复配置时带回来），两条并存时旧的先命中。`cat /etc/config/fstab` 看一眼，删掉旧那条只留 label 那条，重启。
+
+**怎么一眼判断动作 3 到底成没成？**
+`grep overlay /proc/mounts`。显示 `/dev/vda3`（或其它真实设备）= 成了；显示 `/dev/loop0` = 还在镜像内部的 f2fs 回环，没成。
 
 **squashfs 为什么不能扩？**
 它不是普通块设备文件系统，是「压缩只读 + overlay 叠加」。扩分区没有意义，只能新建分区当 overlay。
 
 **扩容后升级固件，数据还在吗？**
-关键看升级时分区表跟固件内置镜像是否一致。不一致时 `sysupgrade` 会**全盘重写**（`Partition layout has changed. Full image will be written.`），独立分区就没了。所以升级前建议先体检：
+关键看升级时分区表跟固件内置镜像是否一致。不一致时 `sysupgrade` 会**全盘重写**（`Partition layout has changed. Full image will be written.`），独立分区就没了。升级前先体检：
 
 ```sh
 sysupgrade -T /path/to/新固件.img.gz
 ```
 
-输出里出现 `Partition layout has changed` 就是警告信号。配套的 `img-installer` 仓库里有 `extroot.sh verify` 做这件事。
+输出里出现 `Partition layout has changed` 就是警告信号。配套的 [img-installer](https://github.com/loticc/img-installer) 仓库里有 `extroot.sh verify` 专门做这件事。
 
 **盘上有多个分区，怎么知道扩哪个？**
-先 `--info` 看表格里的「NO」列，那个序号就是 `--resize` 的参数。
+`--info` 表格里的 NO 列，那个序号就是 `--resize` 的参数。
 
 **支持 MBR 吗？**
-支持。GPT/MBR 都会识别（表格「分区表」列会显示），只是尾部一律按 GPT 的规矩留 34 扇区。
+支持。GPT/MBR 都会识别（「分区表」列显示），只是尾部一律按 GPT 的规矩留 34 扇区。
+
+**多个硬盘怎么办？**
+菜单第一步就是选盘；非交互模式用 `--disk` 指定。脚本一次只操作你选的那一块，不会碰其它盘。
 
 ---
 
