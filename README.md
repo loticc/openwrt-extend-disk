@@ -1,14 +1,36 @@
 # openwrt-extend-disk
 
+**项目地址：** https://github.com/loticc/openwrt-extend-disk
+**脚本直链：** https://raw.githubusercontent.com/loticc/openwrt-extend-disk/main/extend-disk.sh
+**CDN 加速：** https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh
+
 > 刷完固件，把硬盘没用完的空间用起来 —— 一条命令，交互式选盘、选分区、扩分区 / 建新分区 / 接管 `/overlay`。
 
 适用于 **OpenWrt / ImmortalWrt / iStoreOS / LEDE / Armbian 以及任意 Linux**。不写死磁盘名和分区号，认不出的环境也不会瞎动手。
+
+## 一键执行
 
 ```sh
 wget -qO- https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh | sh -s
 ```
 
 粘贴执行即可，全程中文菜单。所有改动动手前都会打印完整计划并要求输入 `YES`。
+
+三种获取方式，按网络情况挑一个：
+
+| 方式 | 地址 | 说明 |
+|---|---|---|
+| CDN 加速（推荐） | `https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh` | 国内一般能通，有缓存；脚本更新后可能延迟几分钟 |
+| GitHub 原始文件 | `https://raw.githubusercontent.com/loticc/openwrt-extend-disk/main/extend-disk.sh` | 内容最新，但国内直连经常失败 |
+| 仓库主页 | https://github.com/loticc/openwrt-extend-disk | 看源码、提 Issue、下载 Release |
+
+想先存下来再跑：
+
+```sh
+wget -qO /root/extend-disk.sh https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh
+chmod +x /root/extend-disk.sh
+sh /root/extend-disk.sh          # 之后随时可重跑，不用再联网
+```
 
 ---
 
@@ -191,6 +213,15 @@ openwrt-extend-disk/
 ├── .gitattributes              # 强制 LF，防 Windows 上传后 sh 报 ^M 错误
 └── .github/workflows/lint.yml  # dash -n 语法检查
 ```
+
+## 相关链接
+
+- 项目主页：https://github.com/loticc/openwrt-extend-disk
+- 脚本直链：https://raw.githubusercontent.com/loticc/openwrt-extend-disk/main/extend-disk.sh
+- CDN 加速：https://cdn.jsdelivr.net/gh/loticc/openwrt-extend-disk@main/extend-disk.sh
+- 配套安装器：[loticc/img-installer](https://github.com/loticc/img-installer)（Custom2 一键刷机 + 自动分 overlay）
+- 上游来源：[wukongdaily/img-installer](https://github.com/wukongdaily/img-installer)
+- 问题反馈：https://github.com/loticc/openwrt-extend-disk/issues
 
 ## License
 
